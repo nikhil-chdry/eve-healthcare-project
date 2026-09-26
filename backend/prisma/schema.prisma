@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model User {
+  id String @id @default(cuid())
+  email String @unique
+  passwordHash String
+  name String
+  createdAt DateTime @default(now())
+  bookings Booking[]
+}
+
+model Centre {
+  id String @id @default(cuid())
+  name String
+  location String
+  createdAt DateTime @default(now())
+  tests Test[]
+  bookings Booking[]
+}
+
+model Test {
+  id String @id @default(cuid())
+  centreId String
+  name String
+  price Decimal @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  centre Centre @relation(fields: [centreId], references: [id], onDelete: Restrict)
+  bookings Booking[]
+}
+
+model Booking {
+  id String @id @default(cuid())
+  userId String
+  testId String
+  centreId String
+  appointmentAt DateTime
+  amount Decimal @db.Decimal(10, 2)
+  status BookingStatus @default(PENDING)
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  test Test @relation(fields: [testId], references: [id], onDelete: Restrict)
+  centre Centre @relation(fields: [centreId], references: [id], onDelete: Restrict)
+  payment Payment?
+  @@index([userId])
+}
+
+model Payment {
+  id String @id @default(cuid())
+  bookingId String @unique
+  provider String
+  providerPaymentId String @unique
+  status PaymentStatus
+  amount Decimal @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+}
+
+model WebhookEvent {
+  id String @id @default(cuid())
+  eventId String @unique
+  payload Json
+  processedAt DateTime @default(now())
+}
