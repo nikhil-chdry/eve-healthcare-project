@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createWebhookProcessor } = require('../src/webhook-processor');
 
-function database({ duplicate = false, payment = { id: 'payment-1', bookingId: 'booking-1' } } = {}) {
+function database({ duplicate = false, payment = { id: 'payment-1', bookingId: 'booking-1', status: 'PENDING' } } = {}) {
   const calls = { paymentUpdates: 0, bookingUpdates: 0 };
   const tx = {
     webhookEvent: { create: async () => { if (duplicate) { const error = new Error('duplicate'); error.code = 'P2002'; throw error; } } },

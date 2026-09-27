@@ -13,6 +13,7 @@ The project focuses on the parts that matter most in a real booking system: safe
 - A mock payment endpoint that produces either `SUCCESS` or `FAILED`.
 - An idempotent payment webhook that cannot apply the same provider event twice.
 - PostgreSQL schema, Prisma migration, Docker Compose database setup, seed data, and automated webhook tests.
+- Pagination, rate-limiting on auth endpoints, structured JSON logging, and a refund flow.
 
 ## Technology choices and why they were used
 
@@ -148,6 +149,7 @@ This is safer than checking only in application code because the unique database
 | GET | `/bookings` | Yes | List only the caller's bookings. |
 | GET | `/bookings/:id` | Yes | Get one caller-owned booking. |
 | PATCH | `/bookings/:id/cancel` | Yes | Cancel a pending booking. |
+| POST | `/bookings/:id/refund` | Yes | Refund a confirmed booking. |
 | POST | `/payments` | Yes | Simulate payment for a pending, caller-owned booking. |
 | POST | `/payments/webhook` | No | Apply a provider status event idempotently. |
 
@@ -225,5 +227,4 @@ The implementation was verified locally with Docker PostgreSQL:
 
 - Add full HTTP integration tests using an isolated PostgreSQL test database.
 - Verify provider webhook signatures and add retry/backoff handling.
-- Add a refund workflow for confirmed bookings.
-- Add OpenAPI/Swagger documentation, rate limiting, pagination, structured logging, and monitoring.
+- Add OpenAPI/Swagger documentation, and monitoring.

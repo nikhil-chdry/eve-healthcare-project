@@ -1,0 +1,218 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "EVE Healthcare Diagnostic Booking API",
+    "version": "1.0.0",
+    "description": "API for booking diagnostic tests and processing simulated payments."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "paths": {
+    "/auth/signup": {
+      "post": {
+        "summary": "Sign up a new user",
+        "tags": ["Auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" },
+                  "name": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "User created" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Login user",
+        "tags": ["Auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      }
+    },
+    "/centres": {
+      "get": {
+        "summary": "List all centres",
+        "tags": ["Centres"],
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      }
+    },
+    "/centres/{id}/tests": {
+      "get": {
+        "summary": "List tests for a centre",
+        "tags": ["Centres"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      }
+    },
+    "/bookings": {
+      "post": {
+        "summary": "Create a new booking",
+        "tags": ["Bookings"],
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "centreId": { "type": "string" },
+                  "testId": { "type": "string" },
+                  "appointmentAt": { "type": "string", "format": "date-time" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Booking created" }
+        }
+      },
+      "get": {
+        "summary": "List user bookings",
+        "tags": ["Bookings"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      }
+    },
+    "/bookings/{id}/cancel": {
+      "patch": {
+        "summary": "Cancel a pending booking",
+        "tags": ["Bookings"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Booking cancelled" }
+        }
+      }
+    },
+    "/bookings/{id}/refund": {
+      "post": {
+        "summary": "Refund a confirmed booking",
+        "tags": ["Bookings"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Refund initiated" }
+        }
+      }
+    },
+    "/payments": {
+      "post": {
+        "summary": "Simulate payment",
+        "tags": ["Payments"],
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "bookingId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Payment simulated" }
+        }
+      }
+    },
+    "/payments/webhook": {
+      "post": {
+        "summary": "Payment webhook handler",
+        "tags": ["Payments"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "eventId": { "type": "string" },
+                  "providerPaymentId": { "type": "string" },
+                  "status": { "type": "string", "enum": ["SUCCESS", "FAILED"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Event processed" }
+        }
+      }
+    }
+  }
+}

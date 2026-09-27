@@ -6,10 +6,14 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { z } = require('zod');
 const { PrismaClient, Prisma } = require('@prisma/client');
+const pinoHttp = require('pino-http');
 const { createWebhookProcessor } = require('./webhook-processor');
-
+const rateLimit = require('express-rate-limit');
+const swaggerUi = require('swagger-ui-express');
+const swaggerDocument = require('../swagger.json');
 const prisma = new PrismaClient();
 const app = express();
+app.use(pinoHttp());
 app.use(express.json());
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -41,7 +45,17 @@ const webhookSchema = z.object({ eventId: z.string().min(1), providerPaymentId: 
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-app.post('/auth/signup', validate(signupSchema), asyncRoute(async (req, res) => {
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 requests per `window` (here, per 15 minutes)
+  message: { error: 'Too many requests from this IP, please try again after 15 minutes' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.post('/auth/signup', authLimiter, validate(signupSchema), asyncRoute(async (req, res) => {
   const passwordHash = await bcrypt.hash(req.body.password, 12);
   try {
     const user = await prisma.user.create({ data: { email: req.body.email.toLowerCase(), passwordHash, name: req.body.name } });
@@ -53,7 +67,7 @@ app.post('/auth/signup', validate(signupSchema), asyncRoute(async (req, res) => 
   }
 }));
 
-app.post('/auth/login', validate(loginSchema), asyncRoute(async (req, res) => {
+app.post('/auth/login', authLimiter, validate(loginSchema), asyncRoute(async (req, res) => {
   const user = await prisma.user.findUnique({ where: { email: req.body.email.toLowerCase() } });
   if (!user || !(await bcrypt.compare(req.body.password, user.passwordHash))) throw new ApiError(401, 'Invalid email or password');
   const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '1h' });
@@ -94,13 +108,40 @@ async function ownedBooking(id, userId) {
   return booking;
 }
 app.get('/bookings', requireAuth, asyncRoute(async (req, res) => {
-  res.json(await prisma.booking.findMany({ where: { userId: req.user.id }, orderBy: { createdAt: 'desc' } }));
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.max(1, Math.min(100, parseInt(req.query.limit) || 10));
+  const skip = (page - 1) * limit;
+
+  const [bookings, total] = await Promise.all([
+    prisma.booking.findMany({ where: { userId: req.user.id }, orderBy: { createdAt: 'desc' }, skip, take: limit }),
+    prisma.booking.count({ where: { userId: req.user.id } })
+  ]);
+
+  res.json({
+    data: bookings,
+    meta: { total, page, limit, totalPages: Math.ceil(total / limit) }
+  });
 }));
 app.get('/bookings/:id', requireAuth, asyncRoute(async (req, res) => res.json(await ownedBooking(req.params.id, req.user.id))));
 app.patch('/bookings/:id/cancel', requireAuth, asyncRoute(async (req, res) => {
   const booking = await ownedBooking(req.params.id, req.user.id);
   if (booking.status !== 'PENDING') throw new ApiError(409, 'Only pending bookings can be cancelled');
   res.json(await prisma.booking.update({ where: { id: booking.id }, data: { status: 'CANCELLED' } }));
+}));
+
+app.post('/bookings/:id/refund', requireAuth, asyncRoute(async (req, res) => {
+  const booking = await ownedBooking(req.params.id, req.user.id);
+  if (booking.status !== 'CONFIRMED') throw new ApiError(409, 'Only confirmed bookings can be refunded');
+  
+  const payment = await prisma.payment.findUnique({ where: { bookingId: booking.id } });
+  if (!payment || payment.status !== 'SUCCESS') throw new ApiError(409, 'No successful payment found to refund');
+
+  // Simulate refund API call
+  if (req.log) req.log.info({ paymentId: payment.id, amount: payment.amount }, 'Simulating refund to payment provider');
+  else console.log(`Simulating refund to payment provider for payment ${payment.id}`);
+  
+  const updatedBooking = await prisma.booking.update({ where: { id: booking.id }, data: { status: 'CANCELLED' } });
+  res.json({ message: 'Refund initiated successfully', booking: updatedBooking });
 }));
 
 const webhookProcessor = createWebhookProcessor(prisma);
@@ -136,7 +177,7 @@ app.use((_req, _res, next) => next(new ApiError(404, 'Route not found')));
 app.use((error, _req, res, _next) => {
   if (error instanceof ApiError) return res.status(error.status).json({ error: error.message });
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return res.status(409).json({ error: 'Duplicate resource' });
-  console.error(error);
+  if (_req.log) _req.log.error(error); else console.error(error);
   res.status(500).json({ error: 'Internal server error' });
 });
 

@@ -20,6 +20,9 @@ function createWebhookProcessor(db) {
         error.code = 'PAYMENT_NOT_FOUND';
         throw error;
       }
+      if (payment.status !== 'PENDING' && payment.status !== payload.status) {
+        throw new Error(`Payment already processed with status ${payment.status}, cannot change to ${payload.status}`);
+      }
 
       await tx.payment.update({ where: { id: payment.id }, data: { status: payload.status } });
       const booking = await tx.booking.update({
