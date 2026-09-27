@@ -9,7 +9,6 @@ Prerequisites: Node.js 20+ and Docker Desktop (for PostgreSQL).
 ```powershell
 Copy-Item .env.example .env
 npm install
-npm install -D prisma
 docker compose up -d db
 npx prisma migrate dev --name init
 npx prisma generate
